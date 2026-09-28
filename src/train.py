@@ -11,6 +11,7 @@ without needing to attach to whatever terminal launched it (`cat outputs/progres
 or `tail -f` the log file if you redirected stdout to one).
 """
 import argparse
+import gc
 import json
 import time
 from pathlib import Path
@@ -86,21 +87,45 @@ def fit(train_df, val_df, mean, std, lr, batch_size, epochs, trial=None, tag="fi
         if trial is not None:
             trial.report(val_f1, epoch)
             if trial.should_prune():
+                _free(model, optimizer)
                 _log(f"{tag} | pruned")
                 raise optuna.TrialPruned()
     return model, best_f1
 
 
-def objective(trial, train_df, mean, std, k, n_trials):
+def _free(model, optimizer=None) -> None:
+    """MPS doesn't release memory back to the OS when a model/optimizer just goes out of
+    scope -- across dozens of trials this accumulates until it eats RAM and swap (this is
+    the likely cause of a full system restart during a long sweep, not "not enough RAM" in
+    general -- ResNet18 training itself needs a few GB, not everything you have)."""
+    del model
+    if optimizer is not None:
+        del optimizer
+    gc.collect()
+    if DEVICE.type == "mps":
+        torch.mps.empty_cache()
+
+
+def objective(trial, train_df, val_df, mean, std, k, n_trials):
     lr = trial.suggest_float("lr", 1e-5, 1e-2, log=True)
     batch_size = trial.suggest_categorical("batch_size", [16, 24, 32])
     epochs = trial.suggest_int("epochs", 5, 20)
     _log(f"trial {trial.number + 1}/{n_trials} | lr={lr:.2e} batch_size={batch_size} epochs={epochs}")
 
+    if k <= 1:
+        # plain train/val split, no CV -- one model per trial instead of k, so both faster
+        # and much lighter on memory (see _free() above for why CV was the trigger, not RAM size)
+        tag = f"trial {trial.number + 1}/{n_trials}"
+        model, f1 = fit(train_df, val_df, mean, std, lr, batch_size, epochs, trial=trial, tag=tag)
+        _free(model, None)
+        _log(f"trial {trial.number + 1}/{n_trials} complete | val F1={f1:.4f}")
+        return f1
+
     fold_scores = []
     for fold_idx, (fold_train, fold_val) in enumerate(kfold_patient_splits(train_df, k=k)):
         tag = f"trial {trial.number + 1}/{n_trials} fold {fold_idx + 1}/{k}"
-        _, f1 = fit(fold_train, fold_val, mean, std, lr, batch_size, epochs, trial=trial, tag=tag)
+        model, f1 = fit(fold_train, fold_val, mean, std, lr, batch_size, epochs, trial=trial, tag=tag)
+        _free(model, None)
         fold_scores.append(f1)
         _log(f"trial {trial.number + 1}/{n_trials} fold {fold_idx + 1}/{k} done | fold F1={f1:.4f}")
     mean_f1 = sum(fold_scores) / len(fold_scores)
@@ -111,7 +136,7 @@ def objective(trial, train_df, mean, std, k, n_trials):
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--trials", type=int, default=50)
-    parser.add_argument("--folds", type=int, default=3)  # 3 over 5: see README rationale / session notes
+    parser.add_argument("--folds", type=int, default=3)  # 1 = plain train/val split, no CV; 3 over 5: see README rationale / session notes
     args = parser.parse_args()
 
     df = load_manifest()
@@ -124,15 +149,19 @@ def main():
 
     # SQLite storage: a crash (like the fd leak above) no longer throws away completed trials --
     # rerunning the same command resumes instead of restarting the sweep from trial 0.
+    # Study name includes --folds so a quick --folds 1 run can't collide with an in-progress
+    # --folds 3 sweep -- they're scored differently (CV mean vs single split) and aren't
+    # comparable, so they live in separate studies in the same db file.
     ROOT.joinpath("outputs").mkdir(exist_ok=True)
     storage = f"sqlite:///{ROOT / 'outputs' / 'optuna_study.db'}"
+    study_name = f"echo_xray_k{args.folds}"
     study = optuna.create_study(
-        study_name="echo_xray", storage=storage, load_if_exists=True,
+        study_name=study_name, storage=storage, load_if_exists=True,
         direction="maximize", pruner=optuna.pruners.MedianPruner(),
     )
     remaining = max(0, args.trials - len(study.trials))
     _log(f"resuming study: {len(study.trials)} trial(s) already recorded, {remaining} to go")
-    study.optimize(lambda t: objective(t, splits["train"], mean, std, args.folds, args.trials), n_trials=remaining)
+    study.optimize(lambda t: objective(t, splits["train"], splits["val"], mean, std, args.folds, args.trials), n_trials=remaining)
 
     _log(f"sweep done | best params: {study.best_params}")
     best = study.best_params

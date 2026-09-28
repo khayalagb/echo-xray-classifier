@@ -1,4 +1,4 @@
-# Echo View Classifier (A2C / A4C / Chest X-ray)
+# Medical Image Classifier (A2C / A4C / Chest X-ray)
 
 A 3-class image classifier that tells apart two echocardiogram views — apical 2-chamber (A2C),
 apical 4-chamber (A4C) — from chest X-rays. ResNet18 backbone, fine-tuned and hyperparameter-tuned

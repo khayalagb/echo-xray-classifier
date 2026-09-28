@@ -4,10 +4,17 @@ __pycache__/
 .venv/
 data/raw/
 data/processed/
-outputs/
+# keep small, reviewable results in git; big binaries (models, logs, the optuna
+# db) stay out and are published as a GitHub Release instead, same as data/
+outputs/*
+!outputs/test_results.json
+!outputs/quantization_benchmark.json
+!outputs/train_meta.json
+!outputs/gradcam/
 *.onnx
 *.pt
 *.pth
 optuna_study.db
+data/*.zip
 .claude/
 scripts/setup_and_train.md

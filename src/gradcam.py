@@ -10,6 +10,9 @@ import torch
 from PIL import Image
 from pytorch_grad_cam import GradCAM
 from pytorch_grad_cam.utils.image import show_cam_on_image
+from pytorch_grad_cam.utils.model_targets import ClassifierOutputTarget
+
+from src.dataset import CLASSES
 
 ROOT = Path(__file__).resolve().parent.parent
 
@@ -20,7 +23,10 @@ def save_gradcam_samples(model, df, transform, out_dir: Path, n=8):
     for _, row in df.head(n).iterrows():
         img = Image.open(ROOT / "data" / "processed" / row["path"]).convert("L")
         x = transform(img).unsqueeze(0)
-        grayscale_cam = cam(input_tensor=x)[0]
+        # newer pytorch-grad-cam requires an explicit target class -- use the true label,
+        # so a misclassified image's CAM shows evidence for what it *should* have predicted
+        target = [ClassifierOutputTarget(CLASSES.index(row["label"]))]
+        grayscale_cam = cam(input_tensor=x, targets=target)[0]
         rgb = np.repeat(np.asarray(img.resize((224, 224)))[..., None], 3, axis=2).astype(np.float32) / 255.0
         overlay = show_cam_on_image(rgb, grayscale_cam, use_rgb=True)
         Image.fromarray(overlay).save(out_dir / f"gradcam_{Path(row['path']).stem}.png")
