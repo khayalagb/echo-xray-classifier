@@ -21,6 +21,14 @@ Skip training entirely and grab the already-trained weights from the [models-v1 
 
 Benchmark (`outputs/quantization_benchmark.json`, ms/inference on Apple Silicon CPU): fp32 PyTorch 10.7, ONNX 12.2, static quantized 9.1.
 
+## Demo
+
+A Streamlit app (`app.py`) for interactive use: upload one or more images (batch supported), see the prediction, an OOD flag if confidence is low, the Grad-CAM overlay, and a horizontal bar chart of class probabilities per image. It downloads `model.pt` from the [models-v1 release](https://github.com/khayalagb/echo-xray-classifier/releases/tag/models-v1) on first run rather than needing local training first.
+
+```
+streamlit run app.py
+```
+
 ## Design decisions
 
 Medical imaging has a few failure modes that are easy to miss and expensive to get wrong, so

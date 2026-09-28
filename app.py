@@ -1,13 +1,15 @@
-"""Public demo: upload an echo frame or chest X-ray, get a prediction + Grad-CAM.
+"""Public demo: upload echo frames / chest X-rays, get predictions + Grad-CAM.
 
 ponytail: one file, no framework beyond Streamlit. Models aren't committed to
 git (keeps the repo small, same call as the dataset) -- this downloads the
 trained checkpoint from the GitHub Release on first run and caches it for the
-life of the container.
+life of the container. Batch upload just loops the single-image path per file
+-- no need for a separate code path.
 """
 import json
 from pathlib import Path
 
+import matplotlib.pyplot as plt
 import numpy as np
 import requests
 import streamlit as st
@@ -24,6 +26,8 @@ from src.transforms import build_transforms
 ROOT = Path(__file__).resolve().parent
 MODEL_URL = "https://github.com/khayalagb/echo-xray-classifier/releases/download/models-v1/model.pt"
 OOD_THRESHOLD = 0.6  # same cutoff as src/evaluate.py
+ACCENT = "#2563EB"  # predicted class
+MUTED = "#9CA3AF"   # everything else
 
 
 @st.cache_resource
@@ -61,7 +65,43 @@ def predict(model, meta, img: Image.Image):
     return pred_idx, probs, overlay
 
 
-st.set_page_config(page_title="Echo / X-ray classifier", page_icon="\U0001fac0")
+def prob_barh(probs, pred_idx):
+    """Horizontal bar plot of class probabilities, predicted class highlighted."""
+    colors = [ACCENT if i == pred_idx else MUTED for i in range(len(CLASSES))]
+    fig, ax = plt.subplots(figsize=(4, 1.6))
+    y = np.arange(len(CLASSES))
+    ax.barh(y, probs, color=colors, height=0.6)
+    for i, p in enumerate(probs):
+        ax.text(p + 0.02, i, f"{p:.0%}", va="center", fontsize=9, color="#374151")
+    ax.set_yticks(y, CLASSES)
+    ax.set_xlim(0, 1.15)
+    ax.invert_yaxis()  # CLASSES order top-to-bottom
+    for spine in ("top", "right", "bottom"):
+        ax.spines[spine].set_visible(False)
+    ax.set_xticks([])
+    ax.tick_params(left=False)
+    fig.tight_layout()
+    return fig
+
+
+def render_result(name, img, model, meta):
+    pred_idx, probs, overlay = predict(model, meta, img)
+    max_prob = float(probs[pred_idx])
+
+    col1, col2, col3 = st.columns([1, 1, 1.2])
+    with col1:
+        st.image(img, caption="Input", use_container_width=True)
+    with col2:
+        st.image(overlay, caption="Grad-CAM", use_container_width=True)
+    with col3:
+        if max_prob < OOD_THRESHOLD:
+            st.warning(f"Low confidence ({max_prob:.2f}) — likely not one of the trained classes (OOD).")
+        else:
+            st.success(f"**{CLASSES[pred_idx]}** ({max_prob:.2%} confidence)")
+        st.pyplot(prob_barh(probs, pred_idx), use_container_width=True)
+
+
+st.set_page_config(page_title="Echo / X-ray classifier", page_icon="\U0001fac0", layout="wide")
 st.title("Echo / X-ray classifier")
 st.caption(
     "ResNet18 classifying apical 2-chamber echo (A2C), apical 4-chamber echo (A4C), "
@@ -70,22 +110,11 @@ st.caption(
 )
 
 model, meta = load_model()
-file = st.file_uploader("Upload an image", type=["png", "jpg", "jpeg"])
+files = st.file_uploader(
+    "Upload one or more images", type=["png", "jpg", "jpeg"], accept_multiple_files=True
+)
 
-if file is not None:
-    img = Image.open(file)
-    pred_idx, probs, overlay = predict(model, meta, img)
-    max_prob = float(probs[pred_idx])
-
-    col1, col2 = st.columns(2)
-    with col1:
-        st.image(img, caption="Input", use_container_width=True)
-    with col2:
-        st.image(overlay, caption="Grad-CAM (evidence for predicted class)", use_container_width=True)
-
-    if max_prob < OOD_THRESHOLD:
-        st.warning(f"Low confidence ({max_prob:.2f}) — likely not one of the three trained classes (OOD).")
-    else:
-        st.success(f"Prediction: **{CLASSES[pred_idx]}** ({max_prob:.2%} confidence)")
-
-    st.bar_chart({cls: float(p) for cls, p in zip(CLASSES, probs)})
+if files:
+    for file in files:
+        with st.expander(file.name, expanded=len(files) <= 5):
+            render_result(file.name, Image.open(file), model, meta)
