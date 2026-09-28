@@ -65,8 +65,11 @@ def fit(train_df, val_df, mean, std, lr, batch_size, epochs, trial=None, tag="fi
     val_ds = EchoXrayDataset(val_df, build_transforms(mean, std, train=False))
     import os
     workers = min(4, os.cpu_count() or 2)
-    train_loader = DataLoader(train_ds, batch_size=batch_size, shuffle=True, num_workers=workers, persistent_workers=True)
-    val_loader = DataLoader(val_ds, batch_size=batch_size, num_workers=workers, persistent_workers=True)
+    # ponytail: persistent_workers=True looked like a free win but leaked file descriptors across
+    # fit() calls (each trial/fold creates a fresh DataLoader) until the OS fd limit was hit mid-sweep
+    # -- see outputs/train.log. Plain per-epoch worker respawn costs a bit of time but is correct.
+    train_loader = DataLoader(train_ds, batch_size=batch_size, shuffle=True, num_workers=workers)
+    val_loader = DataLoader(val_ds, batch_size=batch_size, num_workers=workers)
 
     model = build_model().to(DEVICE)
     optimizer = torch.optim.Adam(model.parameters(), lr=lr)
@@ -119,8 +122,17 @@ def main():
          f"{splits['train']['patient_id'].nunique()}/{splits['val']['patient_id'].nunique()}/{splits['test']['patient_id'].nunique()}")
     _log(f"starting Optuna sweep: {args.trials} trials x {args.folds} folds")
 
-    study = optuna.create_study(direction="maximize", pruner=optuna.pruners.MedianPruner())
-    study.optimize(lambda t: objective(t, splits["train"], mean, std, args.folds, args.trials), n_trials=args.trials)
+    # SQLite storage: a crash (like the fd leak above) no longer throws away completed trials --
+    # rerunning the same command resumes instead of restarting the sweep from trial 0.
+    ROOT.joinpath("outputs").mkdir(exist_ok=True)
+    storage = f"sqlite:///{ROOT / 'outputs' / 'optuna_study.db'}"
+    study = optuna.create_study(
+        study_name="echo_xray", storage=storage, load_if_exists=True,
+        direction="maximize", pruner=optuna.pruners.MedianPruner(),
+    )
+    remaining = max(0, args.trials - len(study.trials))
+    _log(f"resuming study: {len(study.trials)} trial(s) already recorded, {remaining} to go")
+    study.optimize(lambda t: objective(t, splits["train"], mean, std, args.folds, args.trials), n_trials=remaining)
 
     _log(f"sweep done | best params: {study.best_params}")
     best = study.best_params
