@@ -11,6 +11,16 @@ with Optuna + cross-validation, exported to ONNX and quantized for deployment.
 
 Prebuilt processed dataset (2100 PNGs + `manifest.csv`, 655MB): [download](https://github.com/khayalagb/echo-xray-classifier/releases/download/data-v1/processed.zip) ([release page](https://github.com/khayalagb/echo-xray-classifier/releases/tag/data-v1)). Unzip into `data/processed/` to skip `scripts/build_dataset.py` entirely.
 
+## Pretrained models
+
+Skip training entirely and grab the already-trained weights from the [models-v1 release](https://github.com/khayalagb/echo-xray-classifier/releases/tag/models-v1):
+
+- [`model.pt`](https://github.com/khayalagb/echo-xray-classifier/releases/download/models-v1/model.pt) (43MB) — fp32 checkpoint, `state_dict` for `src.model.build_model()`.
+- [`model.onnx`](https://github.com/khayalagb/echo-xray-classifier/releases/download/models-v1/model.onnx) (43MB) — ONNX export, runnable without PyTorch via `onnxruntime`.
+- [`model_static_quant.pt`](https://github.com/khayalagb/echo-xray-classifier/releases/download/models-v1/model_static_quant.pt) (11MB) — int8 statically quantized (qnnpack), ~15% faster inference; no autograd support, so it can't drive Grad-CAM.
+
+Benchmark (`outputs/quantization_benchmark.json`, ms/inference on Apple Silicon CPU): fp32 PyTorch 10.7, ONNX 12.2, static quantized 9.1.
+
 ## Design decisions
 
 Medical imaging has a few failure modes that are easy to miss and expensive to get wrong, so
