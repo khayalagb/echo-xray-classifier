@@ -6,6 +6,8 @@ with Optuna + cross-validation, exported to ONNX and quantized for deployment.
 
 **[Try the live demo](https://echo-xray-classifier.streamlit.app/)**
 
+![Streamlit demo: input, Grad-CAM overlay, and class probabilities](docs/app_screenshot.png)
+
 ## Data
 
 - Echo: CAMUS dataset (ED frames only, A2C + A4C). Pulled from a Kaggle [mirror](https://www.kaggle.com/datasets/shoybhasan/camus-human-heart-data/data) containing only the official CAMUS **train** split — 450 patients per view, 900 frames per view (ED+ES pairs).
