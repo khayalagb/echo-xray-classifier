@@ -124,10 +124,6 @@ st.caption(
     "or chest X-ray. See the "
     "[repo](https://github.com/khayalagb/echo-xray-classifier) for training/eval details."
 )
-cb_col, _ = st.columns([1, 3])
-with cb_col:
-    st.caption("Grad-CAM color scale (applies to every overlay below)")
-    st.pyplot(gradcam_colorbar(), use_container_width=False)
 
 model, meta = load_model()
 files = st.file_uploader(
@@ -135,6 +131,11 @@ files = st.file_uploader(
 )
 
 if files:
+    cb_col, _ = st.columns([1, 3])
+    with cb_col:
+        st.caption("Grad-CAM color scale (applies to every overlay below)")
+        st.pyplot(gradcam_colorbar(), use_container_width=False)
+
     for file in files:
         with st.expander(file.name, expanded=len(files) <= 5):
             render_result(file.name, Image.open(file), model, meta)
