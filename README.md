@@ -26,8 +26,12 @@ Benchmark (`outputs/quantization_benchmark.json`, ms/inference on Apple Silicon 
 A Streamlit app (`app.py`) for interactive use: upload one or more images (batch supported), see the prediction, an OOD flag if confidence is low, the Grad-CAM overlay, and a horizontal bar chart of class probabilities per image. It downloads `model.pt` from the [models-v1 release](https://github.com/khayalagb/echo-xray-classifier/releases/tag/models-v1) on first run rather than needing local training first.
 
 ```
+pip install -r requirements-app.txt
 streamlit run app.py
 ```
+
+(`requirements-app.txt` is the slim subset `app.py` actually imports — training/eval/export need
+the full `requirements.txt`.)
 
 ## Design decisions
 
@@ -78,3 +82,7 @@ tests/            one smoke test per module
 python3 -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
 ```
+
+## License
+
+[MIT](LICENSE)

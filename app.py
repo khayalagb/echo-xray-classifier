@@ -84,6 +84,22 @@ def prob_barh(probs, pred_idx):
     return fig
 
 
+def gradcam_colorbar():
+    """Legend for the Grad-CAM overlay color scale -- matches show_cam_on_image's
+    default OpenCV JET colormap (blue = low relevance, red = high relevance)."""
+    fig, ax = plt.subplots(figsize=(3, 0.35))
+    gradient = np.linspace(0, 1, 256).reshape(1, -1)
+    ax.imshow(gradient, aspect="auto", cmap="jet")
+    ax.set_yticks([])
+    ax.set_xticks([0, 255])
+    ax.set_xticklabels(["low relevance", "high relevance"], fontsize=8, color="#374151")
+    ax.tick_params(length=0)
+    for spine in ax.spines.values():
+        spine.set_visible(False)
+    fig.tight_layout(pad=0.3)
+    return fig
+
+
 def render_result(name, img, model, meta):
     pred_idx, probs, overlay = predict(model, meta, img)
     max_prob = float(probs[pred_idx])
@@ -108,6 +124,10 @@ st.caption(
     "or chest X-ray. See the "
     "[repo](https://github.com/khayalagb/echo-xray-classifier) for training/eval details."
 )
+cb_col, _ = st.columns([1, 3])
+with cb_col:
+    st.caption("Grad-CAM color scale (applies to every overlay below)")
+    st.pyplot(gradcam_colorbar(), use_container_width=False)
 
 model, meta = load_model()
 files = st.file_uploader(
