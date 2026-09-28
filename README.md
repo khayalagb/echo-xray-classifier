@@ -4,6 +4,8 @@ A 3-class image classifier that tells apart two echocardiogram views — apical 
 apical 4-chamber (A4C) — from chest X-rays. ResNet18 backbone, fine-tuned and hyperparameter-tuned
 with Optuna + cross-validation, exported to ONNX and quantized for deployment.
 
+**[Try the live demo](https://echo-xray-classifier.streamlit.app/)**
+
 ## Data
 
 - Echo: CAMUS dataset (ED frames only, A2C + A4C). Pulled from a Kaggle [mirror](https://www.kaggle.com/datasets/shoybhasan/camus-human-heart-data/data) containing only the official CAMUS **train** split — 450 patients per view, 900 frames per view (ED+ES pairs).
@@ -25,13 +27,16 @@ Benchmark (`outputs/quantization_benchmark.json`, ms/inference on Apple Silicon 
 
 A Streamlit app (`app.py`) for interactive use: upload one or more images (batch supported), see the prediction, an OOD flag if confidence is low, the Grad-CAM overlay, and a horizontal bar chart of class probabilities per image. It downloads `model.pt` from the [models-v1 release](https://github.com/khayalagb/echo-xray-classifier/releases/tag/models-v1) on first run rather than needing local training first.
 
+**[Live demo](https://echo-xray-classifier.streamlit.app/)** — or run it locally:
+
 ```
-pip install -r requirements-app.txt
+pip install -r requirements.txt
 streamlit run app.py
 ```
 
-(`requirements-app.txt` is the slim subset `app.py` actually imports — training/eval/export need
-the full `requirements.txt`.)
+(root `requirements.txt` is the slim subset `app.py` actually imports, since Streamlit Community
+Cloud auto-installs whatever's named `requirements.txt` with no way to point it elsewhere;
+training/eval/export need `requirements-train.txt` instead.)
 
 ## Design decisions
 
@@ -80,8 +85,10 @@ tests/            one smoke test per module
 
 ```
 python3 -m venv .venv && source .venv/bin/activate
-pip install -r requirements.txt
+pip install -r requirements-train.txt
 ```
+
+(just running the demo app? `pip install -r requirements.txt` — see Demo above.)
 
 ## License
 
