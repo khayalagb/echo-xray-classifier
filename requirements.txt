@@ -1,0 +1,14 @@
+torch
+torchvision
+optuna
+scikit-learn
+numpy
+pandas
+Pillow
+SimpleITK
+opencv-python-headless
+onnx
+onnxruntime
+grad-cam
+matplotlib
+tqdm

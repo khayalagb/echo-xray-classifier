@@ -1,0 +1,13 @@
+__pycache__/
+*.pyc
+.DS_Store
+.venv/
+data/raw/
+data/processed/
+outputs/
+*.onnx
+*.pt
+*.pth
+optuna_study.db
+.claude/
+scripts/setup_and_train.md
